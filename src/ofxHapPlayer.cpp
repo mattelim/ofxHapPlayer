@@ -53,26 +53,38 @@ extern "C" {
 #define kofxHapPlayerUSecPerSec 1000000L
 
 namespace ofxHapPY {
-    static const string vertexShader = "void main(void)\
-    {\
-    gl_FrontColor = gl_Color;\
-    gl_Position = ftransform();\
-    gl_TexCoord[0] = gl_MultiTexCoord0;\
-    }";
+    static string vertexShader = "#version 150\n \
+    uniform mat4 projectionMatrix;\n \
+    uniform mat4 modelViewMatrix;\n \
+    uniform mat4 textureMatrix;\n \
+    uniform mat4 modelViewProjectionMatrix;\n \
+    in vec4 position;\n \
+    in vec2 texcoord;\n \
+    in vec4 color;\n \
+    in vec3 normal;\n \
+    out vec2 texCoordVarying;\n \
+    void main()\n \
+    {\n \
+    texCoordVarying = texcoord;\n \
+    gl_Position = modelViewProjectionMatrix * position;\n \
+    }\n ";
 
-    static const string fragmentShader = "uniform sampler2D cocgsy_src;\
-    const vec4 offsets = vec4(-0.50196078431373, -0.50196078431373, 0.0, 0.0);\
-    void main()\
-    {\
-    vec4 CoCgSY = texture2D(cocgsy_src, gl_TexCoord[0].xy);\
-    CoCgSY += offsets;\
-    float scale = ( CoCgSY.z * ( 255.0 / 8.0 ) ) + 1.0;\
-    float Co = CoCgSY.x / scale;\
-    float Cg = CoCgSY.y / scale;\
-    float Y = CoCgSY.w;\
-    vec4 rgba = vec4(Y + Co - Cg, Y + Cg, Y - Co - Cg, 1.0);\
-    gl_FragColor = rgba * gl_Color;\
-    }";
+    static string fragmentShader = "#version 150\n \
+    uniform sampler2D cocgsy_src;\n \
+    in vec2 texCoordVarying;\n \
+    out vec4 outputColor;\n \
+    const vec4 offsets = vec4(-0.50196078431373, -0.50196078431373, 0.0, 0.0);\n \
+    void main()\n \
+    {\n \
+    vec4 CoCgSY = texture(cocgsy_src, texCoordVarying);\n \
+    CoCgSY += offsets;\n \
+    float scale = (CoCgSY.z * (255.0 / 8.0)) + 1.0;\n \
+    float Co = CoCgSY.x / scale;\n \
+    float Cg = CoCgSY.y / scale;\n \
+    float Y = CoCgSY.w;\n \
+    vec4 rgba = vec4(Y + Co - Cg, Y + Cg, Y - Co - Cg, 1.0);\n \
+    outputColor = rgba;\n \
+    }\n";
 
     /*
      Utility to round up to a multiple of 4 for DXT dimensions
