@@ -15,6 +15,18 @@ Usage
 Use the OF Project Generator to generate build files for your project, selecting ofxHapPlayer as an addon.
 
     #import "ofxHapPlayer.h"
+    
+Project main.cpp file needs to be changed from:
+
+    ofSetupOpenGL(1280,720,OF_WINDOW);
+
+to:
+
+    ofGLWindowSettings settings;
+    settings.setGLVersion(3,2);
+    settings.windowMode = OF_WINDOW;
+    settings.setSize(1280,720);
+    ofCreateWindow(settings);
 
 Example included requires ofxPSBlend
     
