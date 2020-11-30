@@ -7,6 +7,8 @@ Changed to OpenGL Version 3.2 / #version 150 to be compatible with other add-ons
 
 Example uses a combination of this ofxHapPlayer and ofxPSBlend by Akira-Hayasaka: https://github.com/Akira-Hayasaka/ofxPSBlend
 
+![sample image](HAPxBlend_sample.jpg?raw=true "Combining ofxHapBlend and ofxPSBlend")
+
 Usage
 -----
 
