@@ -171,8 +171,8 @@ ofxHapPlayer::~ofxHapPlayer()
 
 bool ofxHapPlayer::load(string name)
 {
-	_moviePath = name;
-	
+    _moviePath = name;
+    
     /*
     Close any open movie
     */
@@ -504,6 +504,8 @@ ofTexture* ofxHapPlayer::getTexture()
                 internalFormat = GL_COMPRESSED_RGB_S3TC_DXT1_EXT;
                 break;
             case MKTAG('H', 'a', 'p', '5'):
+                internalFormat = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
+                break;
             case MKTAG('H', 'a', 'p', 'Y'):
                 internalFormat = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
                 break;
@@ -521,25 +523,16 @@ ofTexture* ofxHapPlayer::getTexture()
              Create our texture for DXT upload
              */
             ofTextureData texData;
-
-            // Drivers should accept the actual dimensions here, but some have problems with
-            // non-multiple-of-4 dimensions, so allocate with rounded-up dimensions
 #if OFX_HAP_HAS_CODECPAR
-            texData.width = ofxHapPY::roundUpToMultipleOf4(_videoStream->codecpar->width);
-            texData.height = ofxHapPY::roundUpToMultipleOf4(_videoStream->codecpar->height);
+            texData.width = _videoStream->codecpar->width;
+            texData.height = _videoStream->codecpar->height;
 #else
-            texData.width = ofxHapPY::roundUpToMultipleOf4(_videoStream->codec->width);
-            texData.height = ofxHapPY::roundUpToMultipleOf4(_videoStream->codec->height);
+            texData.width = _videoStream->codec->width;
+            texData.height = _videoStream->codec->height;
 #endif
             texData.textureTarget = GL_TEXTURE_2D;
             texData.glInternalFormat = internalFormat;
             _texture.allocate(texData, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV);
-
-            // Now store the actual dimensions so drawing is correct
-            _texture.texData.width = _videoStream->codecpar->width;
-            _texture.texData.height = _videoStream->codecpar->height;
-            _texture.texData.tex_t = _texture.texData.width / _texture.texData.tex_w;
-            _texture.texData.tex_u = _texture.texData.height / _texture.texData.tex_h;
 
 
 #if defined(TARGET_OSX)
@@ -559,7 +552,7 @@ ofTexture* ofxHapPlayer::getTexture()
         glPixelStorei(GL_UNPACK_CLIENT_STORAGE_APPLE, GL_TRUE);
         glTextureRangeAPPLE(GL_TEXTURE_2D, _decodedFrame.buffer.size(), _decodedFrame.buffer.data());
 #endif
-        // As above, some drivers require rounded dimensions here
+
         glCompressedTexSubImage2D(GL_TEXTURE_2D,
             0,
             0,
@@ -609,6 +602,9 @@ ofShader *ofxHapPlayer::getShader()
             }
             if (success)
             {
+                //_shader.setUniformTexture("cocgsy_src", _texture, 1);
+                _shader.bindDefaults(); 
+                // ^ should be necessary
                 _shader.linkProgram();
             }
         }
@@ -618,7 +614,7 @@ ofShader *ofxHapPlayer::getShader()
 }
 
 string ofxHapPlayer::getMoviePath() const {
-	return _moviePath;
+    return _moviePath;
 }
 
 void ofxHapPlayer::draw(float x, float y) {
@@ -1148,7 +1144,5 @@ void ofxHapPlayer::DecodedFrame::clear()
 {
     pts = AV_NOPTS_VALUE;
     duration = 0;
-    // Force deallocation of the vector's storage
-    // (std::vector::clear() is not required to deallocate storage)
     std::vector<char>().swap(buffer);
 }

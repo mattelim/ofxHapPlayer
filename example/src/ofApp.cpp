@@ -1,129 +1,150 @@
-/*
- ofApp.cpp
- ofxHapPlayerExample
- 
- Copyright (c) 2013, Tom Butterworth. All rights reserved.
- Redistribution and use in source and binary forms, with or without
- modification, are permitted provided that the following conditions are met:
- 
- * Redistributions of source code must retain the above copyright
- notice, this list of conditions and the following disclaimer.
- 
- * Redistributions in binary form must reproduce the above copyright
- notice, this list of conditions and the following disclaimer in the
- documentation and/or other materials provided with the distribution.
- 
- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
- ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS BE LIABLE FOR ANY
- DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
-
 #include "ofApp.h"
 
-#define BarInset 20
-#define BarHeight 40
+/*
+ COMMENTS:
+ HAP texture and shader only works with default GL renderer
+ HAP + PSBlend requires OpenGL3.2
+ HAP + PSBlend requires HAP Q (better quality video)
+ !For some reason, for HAP the draw method has to be called under "draw" not "update"
+ */
+
+void ofApp::recursive_Blend(int layersLeft) {
+    if (numFrames == 1) {
+        return;
+    }
+    if (layersLeft > 0) {
+        recursive_Blend(layersLeft-1);
+    } else {
+        // when layersLeft == 0,
+        psBlends[layersLeft].begin();
+        videos[layersLeft].draw(0,0,1280,720);
+        psBlends[layersLeft].end();
+        return;
+    }
+    
+    psBlends[layersLeft].begin();
+    ofTexture *rTexture = videos[layersLeft].getTexture();
+    psBlends[layersLeft-1].draw(*rTexture, blendMode);
+    psBlends[layersLeft].end();
+}
 
 //--------------------------------------------------------------
-void ofApp::setup(){
-    // Limit drawing to a sane rate
-    ofSetVerticalSync(true);
-    
-    ofBackground(0);
-    
-    // Load a movie file
-    load("movies/SampleHap.mov");
-    
-    player.setLoopState(OF_LOOP_NORMAL);
 
-    inScrub = false;
+void ofApp::setup(){
+    
+    numFrames = 5;
+    
+    float framePct;
+    for (int i=0; i<FR; i++){
+        videos[i].load("videos/cat144_HAPQ.MOV");
+        // length of video impacts CPU usage
+        if (i == 0) {
+            video0.load("videos/cat144.MOV");
+            // getTotalNumFrames() does not work in HAP
+            framePct = 2.0/video0.getTotalNumFrames();
+            //cout << "framePct: " << framePct << endl;
+            video0.close();
+        }
+        videos[i].setLoopState(OF_LOOP_NORMAL);
+        videos[i].setPosition(i*framePct);
+        // ^ setFrame(i*3) does not work with HAP
+        videos[i].play();
+    }
+    
+    for (int i=0; i<FR-1; i++){
+        psBlends[i].setup(FRAMEWIDTH,FRAMEHEIGHT);
+    }
+    blendMode = 0;
+    
+    isRecursive = true;
 }
 
 //--------------------------------------------------------------
 void ofApp::update(){
-    // Show or hide the cursor and position bar
-    if (ofGetSystemTimeMillis() - lastMovement < 3000)
-    {
-        drawBar = true;
-    }
-    else
-    {
-        drawBar = false;
-    }
-    ofRectangle window = ofGetWindowRect();
-    if (!drawBar && window.inside(ofGetMouseX(), ofGetMouseY()))
-    {
-        ofHideCursor();
-    }
-    else
-    {
-        ofShowCursor();
+    for (int i=0; i<FR; i++){
+        videos[i].update();
     }
 }
 
 //--------------------------------------------------------------
 void ofApp::draw(){
-    if (player.isLoaded())
-    {
-        // Draw the video frame
-        ofSetColor(255, 255, 255);
-        ofRectangle videoRect(0, 0, player.getWidth(), player.getHeight());
-        videoRect.scaleTo(ofGetWindowRect());
-        player.draw(videoRect.x, videoRect.y, videoRect.width, videoRect.height);
+    if (numFrames == 1) {
+         videos[0].draw(0,0,1280,720);
+    } else {
+        if (isRecursive) {
+            /* Multiple layer PSBlend, recursive
+             */
+            recursive_Blend(numFrames-2);
+        } else {
+            /* Multiple layer PSBlend, iterative
+             */
+            for (int i=0; i<FR-1; i++) {
+                psBlends[i].begin();
+                if (i == 0) {
+                    videos[0].draw(0,0,1280,720);
+                } else {
+                    ofTexture *texture = videos[i].getTexture();
+                    psBlends[i-1].draw(*texture, blendMode);
+                }
+                psBlends[i].end();
 
-        // Draw the position bar if appropriate
-        if (drawBar)
-        {
-            ofNoFill();
-            ofRectangle bar = getBarRectangle();
-            ofSetColor(244, 66, 234);
-            ofDrawRectangle(bar);
-            ofFill();
-            ofSetColor(244, 66, 234, 180);
-            bar.width *= player.getPosition();
-            ofDrawRectangle(bar);
+                if (i == numFrames) {
+                    break;
+                }
+            }
         }
-    }
-    else
-    {
-        if (player.getError().length())
-        {
-            ofDrawBitmapStringHighlight(player.getError(), 20, 20);
-        }
-        else
-        {
-            ofDrawBitmapStringHighlight("Movie is loading...", 20, 20);
-        }
-    }
-}
 
-void ofApp::load(std::string movie)
-{
-    ofSetWindowTitle(ofFilePath::getBaseName(movie));
-    player.load(movie);
-    player.play();
-    lastMovement = ofGetSystemTimeMillis();
+        ofTexture *dTexture = videos[numFrames-1].getTexture();
+        psBlends[numFrames-2].draw(*dTexture, blendMode);
+    }
+
+    ofSetWindowTitle("blendMode: " + psBlends[3].getBlendMode(blendMode));
+    ofDrawBitmapString("press LEFT/RIGHT key to change Blend Mode", 10, 20);
+    ofDrawBitmapString("press UP/DOWN key to change Number of Streams", 10, 40);
+    ofDrawBitmapString("Current Number: " + to_string(numFrames), 10, 60);
+
 }
 
 //--------------------------------------------------------------
 void ofApp::keyPressed(int key){
-    if (key == ' ')
-    {
-        player.setPaused(!player.isPaused());
-    }
-    else if (key == OF_KEY_UP)
-    {
-        player.setVolume(player.getVolume() + 0.1);
-    }
-    else if (key == OF_KEY_DOWN)
-    {
-        player.setVolume(player.getVolume() - 0.1);
+    switch(key){
+        case OF_KEY_DOWN:
+            if (numFrames <= 1) {
+                numFrames = 1;
+            } else {
+                numFrames--;
+            }
+        break;
+        case OF_KEY_UP:
+            if (numFrames >= FR) {
+                numFrames = FR;
+            } else {
+                numFrames++;
+            }
+        break;
+        case OF_KEY_LEFT:
+            if (blendMode <= 0) {
+                blendMode = 24;
+            } else {
+                blendMode--;
+            }
+        break;
+        case OF_KEY_RIGHT:
+            if (blendMode >= 24) {
+                blendMode = 0;
+            } else {
+                blendMode++;
+            }
+        break;
+        case ' ':
+            for (int i=0; i<FR; i++){
+                if (videos[i].isPaused()) {
+                    videos[i].play();
+                } else {
+                    videos[i].setPaused(true);
+                }
+            }
+        break;
     }
 }
 
@@ -132,53 +153,34 @@ void ofApp::keyReleased(int key){
 
 }
 
-void ofApp::mouseEntered(int x, int y) {
-
-}
-
-void ofApp::mouseExited(int x, int y) {
-
-}
-
 //--------------------------------------------------------------
-void ofApp::mouseMoved(int x, int y){
-    if (ofGetWindowRect().inside(x, y))
-    {
-        lastMovement = ofGetSystemTimeMillis();
-    }
+void ofApp::mouseMoved(int x, int y ){
+
 }
 
 //--------------------------------------------------------------
 void ofApp::mouseDragged(int x, int y, int button){
-    if (inScrub)
-    {
-        float position = static_cast<float>(x - BarInset) / getBarRectangle().width;
-        position = std::max(0.0f, std::min(position, 1.0f));
-        player.setPosition(position);
-        lastMovement = ofGetSystemTimeMillis();
-    }
+
 }
 
 //--------------------------------------------------------------
 void ofApp::mousePressed(int x, int y, int button){
-    ofRectangle bar = getBarRectangle();
-    if (bar.inside(x, y))
-    {
-        inScrub = true;
-        wasPaused = player.isPaused() || player.getIsMovieDone();
-        player.setPaused(true);
-        mouseDragged(x, y, button);
-    }
-    lastMovement = ofGetSystemTimeMillis();
+
 }
 
 //--------------------------------------------------------------
 void ofApp::mouseReleased(int x, int y, int button){
-    if (inScrub)
-    {
-        inScrub = false;
-        player.setPaused(wasPaused);
-    }
+
+}
+
+//--------------------------------------------------------------
+void ofApp::mouseEntered(int x, int y){
+
+}
+
+//--------------------------------------------------------------
+void ofApp::mouseExited(int x, int y){
+
 }
 
 //--------------------------------------------------------------
@@ -193,11 +195,6 @@ void ofApp::gotMessage(ofMessage msg){
 
 //--------------------------------------------------------------
 void ofApp::dragEvent(ofDragInfo dragInfo){
-	vector< string > fileList = dragInfo.files;
-    load(fileList[0]);
+
 }
 
-ofRectangle ofApp::getBarRectangle() const
-{
-    return ofRectangle(BarInset, ofGetWindowHeight() - BarInset - BarHeight, ofGetWindowWidth() - (2 * BarInset), BarHeight);
-}
